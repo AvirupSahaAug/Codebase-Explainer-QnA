@@ -33,25 +33,30 @@ except ImportError as e:
     sys.exit(1)
 
 class TutorialGeneratorMAKER:
-    def __init__(self, model_name: str = "llama3.1:8b", persist_dir: str = "db_faiss"):
+    def __init__(self, model_name: str = "llama3.1:8b", persist_dir: str = "db_faiss", progress_callback=None):
         self.model_name = model_name
         self.repo_path = None
         self.vector_store = None
         self.qa_chain = None
         self.persist_dir = persist_dir
+        self.progress_callback = progress_callback # function(current, total, status_msg)
         
         # Check Ollama connection immediately
         self._check_ollama()
+
+    def _update_progress(self, current, total, message):
+        if self.progress_callback:
+            self.progress_callback(current, total, message)
 
     def _check_ollama(self):
         try:
             response = requests.get("http://localhost:11434/api/tags", timeout=5)
             if response.status_code != 200:
                 print("❌ Ollama not running! Run: ollama serve")
-                sys.exit(1)
+                # Don't exit in API mode, just raise error
+                raise Exception("Ollama not running")
         except:
-            print("❌ Could not connect to Ollama. Is it running?")
-            sys.exit(1)
+            raise Exception("Could not connect to Ollama")
 
     def clone_repository(self, repo_url: str) -> str:
         """Clone or update repository"""
@@ -87,7 +92,9 @@ class TutorialGeneratorMAKER:
                     files_to_process.append(file_path)
         
         print(f"📚 Found {len(files_to_process)} eligible files. Loading content...")
+        self._update_progress(0, len(files_to_process), "Loading files...")
         
+        loaded_count = 0
         for file_path in tqdm(files_to_process, unit="file"):
             try:
                 content = self.read_file_content(file_path)
@@ -100,9 +107,13 @@ class TutorialGeneratorMAKER:
                     }
                 )
                 documents.append(doc)
+                loaded_count += 1
+                if loaded_count % 10 == 0:
+                    self._update_progress(loaded_count, len(files_to_process), f"Loaded {loaded_count} files")
             except Exception:
                 pass # Skip files that fail to read
         
+        self._update_progress(len(files_to_process), len(files_to_process), "Files loaded.")
         return documents
     
     def read_file_content(self, file_path: Path) -> str:
@@ -160,18 +171,22 @@ class TutorialGeneratorMAKER:
         3. Generate: Create final tutorial from aggregated context (Reduce).
         """
         print("\n🤖 MAKER: Decomposing task into micro-agents...")
+        self._update_progress(0, 100, "Starting MAKER analysis...")
         
         file_summaries = []
         # Limit to top 50 files to save time/tokens for this demo, 
         # but in full production this would run on all files parallelized.
         sample_docs = documents[:50] 
+        total_docs = len(sample_docs)
         
-        for doc in tqdm(sample_docs, desc="Micro-Agent Summarization"):
+        for i, doc in enumerate(tqdm(sample_docs, desc="Micro-Agent Summarization")):
             summary = self._micro_agent_summarize(doc)
             if summary:
                 file_summaries.append(summary)
+            self._update_progress(i + 1, total_docs, f"Analyzing {doc.metadata['source']}...")
         
         print(f"✅ Aggregated {len(file_summaries)} file summaries.")
+        self._update_progress(100, 100, "Generating final report...")
         
         # MAP-REDUCE: Final generation
         context_blob = "\n".join(file_summaries)
@@ -272,6 +287,30 @@ class TutorialGeneratorMAKER:
         with open(report_file, "w", encoding="utf-8") as f:
             f.write(html_content)
         return report_file
+
+    def ask_question(self, question: str) -> Dict:
+        """Ask a question about the codebase"""
+        if not self.qa_chain:
+            return {"error": "System not ready. Please analyze a repo first."}
+        
+        try:
+            print(f"🤔 Asking: {question}")
+            result = self.qa_chain({"query": question})
+            
+            # Extract sources
+            sources = []
+            for doc in result.get("source_documents", []):
+                sources.append({
+                    "file": doc.metadata.get("source", "unknown"),
+                    "content": doc.page_content[:300] + "..." if len(doc.page_content) > 300 else doc.page_content
+                })
+            
+            return {
+                "answer": result["result"],
+                "sources": sources
+            }
+        except Exception as e:
+            return {"error": str(e)}
 
 def main():
     parser = argparse.ArgumentParser(description="Codebase Explainer (MAKER Edition)")

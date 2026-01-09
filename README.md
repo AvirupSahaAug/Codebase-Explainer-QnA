@@ -1,66 +1,38 @@
-
-
-# 🤖 Codebase-Explainer-QnA
+# 🤖 Codebase-Explainer-QnA (MAKER Edition)
 
 Tired of spending hours trying to understand a new open-source project? This tool is built for **open-source contributors** to get up to speed on any new codebase in minutes.
 
-It clones a GitHub repository, uses a local LLM (Ollama) to generate a high-level tutorial, and then builds an interactive Q\&A system so you can ask specific questions about the code.
-
-## 🚀 The 'Get Into The Thing' Tool for OSS
-
-The biggest barrier to contributing to open source is the steep learning curve. This tool flattens that curve. Instead of manually reading thousands of lines of code, you get:
-
-1.  **An Automated Tutorial:** An `index.html` report with a project overview, setup instructions, and key components.
-2.  **A Code-Aware AI Assistant:** A Q\&A bot that has already "read" the entire repo.
-
-This lets you find the exact file you need to edit, understand the project's architecture, and **make your first contribution faster.**
+It uses a local LLM (Ollama) and the **MAKER Framework** to decompose the codebase into micro-tasks, generating a high-quality architectural tutorial and an interactive Q&A system.
 
 ## ✨ Features
 
-  * **One-Click Analysis:** Just provide a GitHub URL.
-  * **Automated Tutorial:** Generates an HTML report with a project overview, setup instructions, and key component analysis.
-  * **Interactive Q\&A:** A terminal-based chatbot to ask specific questions (e.g., "What does the `User` class do?", "Where are API keys handled?").
-  * **Local & Private:** Uses your local [Ollama](https://ollama.com/) instance, so the code never leaves your machine.
-  * **RAG-Powered:** Uses LangChain and FAISS to build a Retrieval-Augmented Generation (RAG) pipeline for accurate, source-aware answers.
+*   **Web Interface (NEW):** A modern, dark-themed dashboard to chat with your code and view reports.
+*   **MAKER Framework:** Uses "Micro-Agents" to summarize files individually (Decomposition) and validates outputs (Red-Flagging) for higher reliability.
+*   **Issue Resolver:** A dedicated chat mode to debug specific issues, suggesting files and fixes.
+*   **Automated Tutorial:** Generates an HTML report with project overview and architecture.
+*   **Local & Private:** Uses your local [Ollama](https://ollama.com/) instance.
+*   **Persistence:** Saves the vector database to disk so you don't have to re-analyze the same repo twice.
 
 ## 🛠️ Installation & Setup
 
-### 1\. Prerequisites
+### 1. Prerequisites
+*   [Git](https://git-scm.com/downloads)
+*   [Python 3.8+](https://www.python.org/downloads/)
+*   [Ollama](https://ollama.com/) installed and running.
 
-  * [Git](https://www.google.com/search?q=https://git-scm.com/downloads)
-  * [Python 3.8+](https://www.python.org/downloads/)
-  * [Ollama](https://ollama.com/) installed and running.
-
-### 2\. Setup Instructions
-
+### 2. Setup
 1.  **Clone this repository:**
-
     ```bash
     git clone https://github.com/your-username/codebase-quickstart.git
     cd codebase-quickstart
     ```
 
-2.  **Create and activate a virtual environment:**
-
+2.  **Install dependencies:**
     ```bash
-    # Windows
-    python -m venv venv
-    .\venv\Scripts\activate
-
-    # macOS / Linux
-    python3 -m venv venv
-    source venv/bin/activate
+    pip install langchain langchain-community langchain-core langchain-text-splitters faiss-cpu requests markdown tqdm fastapi uvicorn python-multipart
     ```
 
-3.  **Install the required Python packages:**
-
-    ```bash
-    pip install langchain langchain-community langchain-core langchain-text-splitters faiss-cpu requests markdown
-    ```
-
-4.  **Pull the required Ollama models:**
-    This script uses `llama3.1:8b` for generation and `nomic-embed-text` for embeddings.
-
+3.  **Pull Ollama models:**
     ```bash
     ollama pull llama3.1:8b
     ollama pull nomic-embed-text
@@ -68,71 +40,30 @@ This lets you find the exact file you need to edit, understand the project's arc
 
 ## 🏃‍♂️ How to Use
 
-1.  **Run Ollama:**
-    In a separate terminal, make sure the Ollama server is running:
+### Option A: Web Interface (Recommended)
+The best way to experience the tool is via the simplified Web UI.
 
+1.  **Start the server:**
     ```bash
-    ollama serve
+    python server.py
     ```
+2.  **Open your browser:** Go to `http://localhost:8000`
+3.  **Enter a GitHub URL:** Click "Analyze" and watch the micro-agents work.
+4.  **Chat:** Use the "Chat" or "Issue Resolver" tabs to interact with the codebase.
 
-2.  **Run the script:**
+### Option B: CLI Tool
+If you prefer the terminal:
 
-    ```bash
-    python tutorial_generator.py
-    ```
+```bash
+# Analyze a repo and save the database
+python tutorial_generator.py --url https://github.com/username/repo --persist
+```
 
-3.  **Enter a GitHub URL:**
-    When prompted, paste the URL of the repository you want to analyze.
+## 🔧 How It Works (The MAKER Method)
 
-    ```
-    ==================================================
-    🤖 Tutorial Generator - Ollama + LangChain
-    ==================================================
+This tool applies the researched **MAKER Framework** (Massively Agentic decomposed processes):
 
-    📥 Enter GitHub URL: https://github.com/langchain-ai/langchain
-    ```
-
-4.  **Get Your Outputs:**
-
-      * **HTML Report:** The script will clone the repo, analyze the code, and generate a tutorial. You'll find it in the `reports/` directory (e.g., `reports/repo_langchain_tutorial.html`).
-      * **Q\&A System:** After the report is built, the script will launch the interactive Q\&A system in your terminal.
-
-    <!-- end list -->
-
-    ```
-    ✅ Tutorial generated: reports/repo_langchain_tutorial.html
-
-    💬 Q&A System Ready! Ask questions about the codebase.
-    Type 'quit' to exit.
-
-    ❓ Question: What is the main purpose of the Document class?
-
-    📝 Answer: The `Document` class, found in `langchain_core/documents/`, acts as a container for a piece of text and its associated metadata. It's a fundamental unit of data used throughout the library, representing a single "document" that can be processed, retrieved, or used in a chain.
-
-    📚 Sources:
-       1. langchain_core/documents/base.py
-    --------------------------------------------------
-    ❓ Question:
-    ```
-
-## 🔧 How It Works (Technical Details)
-
-This tool uses two distinct methods for its two main features:
-
-1.  **Tutorial Generation (Direct API Call):**
-
-      * It samples the first 20 code files from the repository.
-      * It combines their content into a single, large prompt.
-      * It sends this prompt directly to the Ollama `/api/generate` endpoint to get a high-level markdown tutorial.
-      * It converts this markdown to a styled HTML file.
-
-2.  **Q\&A System (LangChain RAG):**
-
-      * **Load:** Scans all code files into LangChain `Document` objects.
-      * **Split:** Breaks down large files into smaller chunks using `RecursiveCharacterTextSplitter`.
-      * **Embed & Store:** Uses `OllamaEmbeddings` (with `nomic-embed-text`) to create numerical vector representations of each chunk and stores them in a local `FAISS` vector store.
-      * **Retrieve & Answer:** When you ask a question, the `RetrievalQA` chain:
-        1.  Embeds your question.
-        2.  Searches the `FAISS` store for the most relevant code chunks (the "context").
-        3.  Passes your question and the retrieved context to the `Ollama` LLM (`llama3.1:8b`).
-        4.  Generates a final answer based *only* on the provided context, with links to the source files.
+1.  **Decomposition (Micro-Agents):** Instead of one giant prompt, the tool spawns a "Micro-Agent" for every file to summarize its purpose.
+2.  **Red-Flagging:** Bad outputs from agents are detected and discarded/retried.
+3.  **Aggregation:** Verified summaries are combined to produce the final architectural report.
+4.  **RAG Q&A:** The full codebase is embedded into a FAISS vector store for the chat system.

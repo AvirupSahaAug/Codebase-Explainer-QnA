@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """
 Tutorial Generator with Ollama + LangChain
-Fixed imports version
+MAKER Framework Edition: Decomposition, Error Correction, and Scale
 
 Usage:
-1. Run the script
-2. Enter GitHub URL when prompted
-3. Get HTML tutorial + Q&A system
+    python tutorial_generator.py --url <github_url> [--model <model_name>] [--persist]
+
 """
 
 import os
+import sys
+import argparse
 import subprocess
+import time
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 import requests
 import markdown
+from tqdm import tqdm
 
-# LangChain imports - fixed
+# LangChain imports (Standard)
 try:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
     from langchain_community.vectorstores import FAISS
@@ -24,35 +27,45 @@ try:
     from langchain_community.llms import Ollama
     from langchain_core.documents import Document
     from langchain_classic.chains import RetrievalQA
-
-
     from langchain_classic.prompts import PromptTemplate
-    print("✅ All LangChain imports successful")
 except ImportError as e:
     print(f"❌ Missing LangChain component: {e}")
-    print("Run: pip install langchain langchain-community langchain-core langchain-text-splitters faiss-cpu")
-    exit(1)
+    sys.exit(1)
 
-class TutorialGeneratorWithLangChain:
-    def __init__(self, model_name: str = "llama3.1:8b"):
+class TutorialGeneratorMAKER:
+    def __init__(self, model_name: str = "llama3.1:8b", persist_dir: str = "db_faiss"):
         self.model_name = model_name
         self.repo_path = None
         self.vector_store = None
         self.qa_chain = None
+        self.persist_dir = persist_dir
         
+        # Check Ollama connection immediately
+        self._check_ollama()
+
+    def _check_ollama(self):
+        try:
+            response = requests.get("http://localhost:11434/api/tags", timeout=5)
+            if response.status_code != 200:
+                print("❌ Ollama not running! Run: ollama serve")
+                sys.exit(1)
+        except:
+            print("❌ Could not connect to Ollama. Is it running?")
+            sys.exit(1)
+
     def clone_repository(self, repo_url: str) -> str:
         """Clone or update repository"""
         repo_name = repo_url.rstrip("/").split("/")[-1].replace(".git", "")
         self.repo_path = f"./repo_{repo_name}"
         
         if os.path.exists(self.repo_path):
-            print(f"📂 Updating existing repository...")
+            print(f"📂 Updating existing repository: {repo_name}")
             try:
                 subprocess.run(["git", "pull"], cwd=self.repo_path, check=True, capture_output=True)
             except:
                 print("⚠️ Could not pull updates, using existing code")
         else:
-            print(f"📦 Cloning repository...")
+            print(f"📦 Cloning repository: {repo_name}")
             subprocess.run(["git", "clone", "--depth", "1", repo_url, self.repo_path], 
                          check=True, capture_output=True)
             
@@ -60,92 +73,166 @@ class TutorialGeneratorWithLangChain:
     
     def load_code_documents(self) -> List[Document]:
         """Load code files as LangChain Documents"""
-        exclude_dirs = {'node_modules', 'venv', '.git', '__pycache__', 'dist', 'build'}
-        include_exts = {'.py', '.js', '.jsx', '.ts', '.tsx', '.c', '.cc', '.cpp', '.md', '.json'}
+        exclude_dirs = {'node_modules', 'venv', '.git', '__pycache__', 'dist', 'build', 'site-packages'}
+        include_exts = {'.py', '.js', '.jsx', '.ts', '.tsx', '.c', '.cc', '.cpp', '.md', '.json', '.html', '.css', '.java', '.go', '.rs'}
         
         documents = []
-        
+        files_to_process = []
+
         for root, dirs, files in os.walk(self.repo_path):
-            # Skip excluded directories
             dirs[:] = [d for d in dirs if d not in exclude_dirs]
-            
             for file in files:
                 file_path = Path(root) / file
                 if file_path.suffix.lower() in include_exts:
-                    try:
-                        content = self.read_file_content(file_path)
-                        relative_path = file_path.relative_to(self.repo_path)
-                        
-                        # Create LangChain Document
-                        doc = Document(
-                            page_content=content,
-                            metadata={
-                                "source": str(relative_path),
-                                "file_type": file_path.suffix,
-                            }
-                        )
-                        documents.append(doc)
-                        
-                    except Exception as e:
-                        print(f"⚠️ Error reading {file_path}: {e}")
+                    files_to_process.append(file_path)
         
-        print(f"📁 Loaded {len(documents)} code documents")
+        print(f"📚 Found {len(files_to_process)} eligible files. Loading content...")
+        
+        for file_path in tqdm(files_to_process, unit="file"):
+            try:
+                content = self.read_file_content(file_path)
+                relative_path = file_path.relative_to(self.repo_path)
+                doc = Document(
+                    page_content=content,
+                    metadata={
+                        "source": str(relative_path),
+                        "file_type": file_path.suffix,
+                    }
+                )
+                documents.append(doc)
+            except Exception:
+                pass # Skip files that fail to read
+        
         return documents
     
     def read_file_content(self, file_path: Path) -> str:
-        """Read file content with encoding handling"""
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-                if len(content) > 8000:
-                    return content[:8000] + "\n//...truncated"
-                return content
-        except:
+        """Read file content with robust encoding handling"""
+        encodings = ['utf-8', 'latin-1', 'cp1252']
+        for enc in encodings:
             try:
-                with open(file_path, 'r', encoding='latin-1') as f:
-                    content = f.read()
-                    if len(content) > 8000:
-                        return content[:8000] + "\n//...truncated"
-                    return content
+                with open(file_path, 'r', encoding=enc) as f:
+                    return f.read()
             except:
-                return f"// Could not read: {file_path.name}"
-    
-    def setup_qa_system(self, documents: List[Document]):
-        """Setup LangChain Q&A system with vector store"""
-        print("🔧 Setting up Q&A system...")
+                continue
+        raise Exception("Could not read file")
+
+    def _micro_agent_summarize(self, doc: Document) -> Optional[str]:
+        """
+        Micro-Agent: Summarizes a single file.
+        Red-Flagging: Retries or fails if output is malformed.
+        """
+        prompt = f"""
+        Role: Senior Developer
+        Task: 1-sentence summary of this file's purpose.
+        File: {doc.metadata['source']}
+        Code Snippet:
+        {doc.page_content[:2000]}
         
-        # Split documents into chunks
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200
-        )
-        chunks = text_splitter.split_documents(documents)
-        print(f"📄 Split into {len(chunks)} chunks")
+        Format: "File: [filename] - [Summary]"
+        """
         
-        # Create embeddings and vector store
         try:
-            embeddings = OllamaEmbeddings(model="nomic-embed-text")
+            response = requests.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": self.model_name,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"temperature": 0.1} # Low temp for deterministic execution
+                },
+                timeout=30
+            )
+            text = response.json().get("response", "").strip()
+            
+            # Red-Flagging: Basic validation
+            if len(text) < 10 or "error" in text.lower(): 
+                return None # Discard bad response
+                
+            return text
+        except:
+            return None
+
+    def generate_tutorial_maker_style(self, repo_name: str, documents: List[Document]) -> str:
+        """
+        MAKER Framework Implementation:
+        1. Decompose: Summarize each file individually (Map).
+        2. Aggregate: Combine summaries.
+        3. Generate: Create final tutorial from aggregated context (Reduce).
+        """
+        print("\n🤖 MAKER: Decomposing task into micro-agents...")
+        
+        file_summaries = []
+        # Limit to top 50 files to save time/tokens for this demo, 
+        # but in full production this would run on all files parallelized.
+        sample_docs = documents[:50] 
+        
+        for doc in tqdm(sample_docs, desc="Micro-Agent Summarization"):
+            summary = self._micro_agent_summarize(doc)
+            if summary:
+                file_summaries.append(summary)
+        
+        print(f"✅ Aggregated {len(file_summaries)} file summaries.")
+        
+        # MAP-REDUCE: Final generation
+        context_blob = "\n".join(file_summaries)
+        
+        final_prompt = f"""
+        Create a high-level architectural tutorial for the repository '{repo_name}'.
+        
+        Based ONLY on these file summaries:
+        {context_blob}
+        
+        Structure:
+        # 1. Project Overview
+        # 2. Architecture & Key Components
+        # 3. Main Logic Flow
+        # 4. Usage Inference (How it likely works)
+        """
+        
+        print("📝 Generating final tutorial...")
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": self.model_name,
+                "prompt": final_prompt,
+                "stream": False
+            },
+            timeout=120
+        )
+        return response.json().get("response", "Generation Failed")
+
+    def setup_qa_system(self, documents: List[Document], use_persist: bool = False) -> bool:
+        """Setup Vector Store with Persistence"""
+        print("\n🔧 Setting up Q&A System...")
+        
+        persist_path = Path(self.persist_dir)
+        embeddings = OllamaEmbeddings(model="nomic-embed-text")
+
+        if use_persist and persist_path.exists():
+            print("💾 Loading existing vector store from disk...")
+            try:
+                self.vector_store = FAISS.load_local(self.persist_dir, embeddings, allow_dangerous_deserialization=True)
+                print("✅ Loaded from cache.")
+            except Exception as e:
+                print(f"⚠️ Cache load failed ({e}), rebuilding...")
+                use_persist = False # Fallback to rebuild
+
+        if not self.vector_store:
+            print("creating new embeddings...")
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            chunks = text_splitter.split_documents(documents)
+            
+            # Batch embedding could include tqdm here
             self.vector_store = FAISS.from_documents(chunks, embeddings)
-        except Exception as e:
-            print(f"⚠️ Could not create embeddings: {e}")
-            print("🔧 Falling back to simple similarity search")
-            # Simple fallback without embeddings
-            self.vector_store = None
-            return
-        
-        # Setup LLM
+            
+            if use_persist:
+                self.vector_store.save_local(self.persist_dir)
+                print("💾 Vector store saved to disk.")
+
+        # Setup Chain
         llm = Ollama(model=self.model_name, temperature=0.1)
-        
-        # Create Q&A chain
         qa_prompt = PromptTemplate(
-            template="""You are a code expert. Use the context to answer questions.
-
-Context: {context}
-
-Question: {question}
-
-Answer based on the code. Reference specific files and provide code snippets when helpful.
-Answer:""",
+            template="""Context: {context}\n\nQuestion: {question}\n\nAnswer:""",
             input_variables=["context", "question"]
         )
         
@@ -153,258 +240,93 @@ Answer:""",
             llm=llm,
             chain_type="stuff",
             retriever=self.vector_store.as_retriever(search_kwargs={"k": 4}),
-            return_source_documents=True,
-            chain_type_kwargs={"prompt": qa_prompt}
+            chain_type_kwargs={"prompt": qa_prompt},
+            return_source_documents=True
         )
-        
-        print("✅ Q&A system ready!")
-    
-    def ask_question(self, question: str) -> Dict:
-        """Ask a question about the codebase"""
-        if not self.qa_chain:
-            return {"error": "Q&A system not setup"}
-        
-        try:
-            result = self.qa_chain({"query": question})
-            
-            # Extract sources
-            sources = []
-            for doc in result.get("source_documents", []):
-                sources.append({
-                    "file": doc.metadata.get("source", "unknown"),
-                    "content": doc.page_content[:300] + "..." if len(doc.page_content) > 300 else doc.page_content
-                })
-            
-            return {
-                "answer": result["result"],
-                "sources": sources
-            }
-        except Exception as e:
-            return {"error": str(e)}
-    
-    def generate_tutorial(self, repo_name: str, documents: List[Document]) -> str:
-        """Generate tutorial using Ollama"""
-        print("🤖 Generating tutorial...")
-        
-        # Prepare context from documents
-        context = ""
-        for doc in documents[:20]:  # Limit context
-            context += f"\n--- File: {doc.metadata['source']} ---\n"
-            context += doc.page_content[:500] + "\n"  # Limit per file
-        
-        prompt = f"""
-        Create a comprehensive tutorial for this codebase:
+        return True
 
-        Repository: {repo_name}
-
-        Code Context:
-        {context[:6000]}
-
-        Create a markdown tutorial with:
-
-        # Project Overview
-        - Purpose and main features
-
-        # Setup Instructions
-        - Installation steps
-        - How to run
-
-        # Key Components
-        - Main files and their roles
-        - Important functions/classes
-
-        # Usage Examples
-        - How to use the code
-        - Code examples
-
-        Reference specific files from the codebase.
-        """
-        
-        # Call Ollama directly
-        try:
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json={
-                    "model": self.model_name,
-                    "prompt": prompt,
-                    "stream": False
-                },
-                timeout=120
-            )
-            response.raise_for_status()
-            return response.json().get("response", "No response")
-        except Exception as e:
-            return f"Error generating tutorial: {e}"
-    
-    def create_html_report(self, tutorial: str, repo_name: str, file_count: int):
-        """Create HTML report with tutorial"""
+    def create_html_report(self, tutorial: str, repo_name: str) -> str:
+        """Create HTML report"""
         tutorial_html = markdown.markdown(tutorial)
-        
         html_content = f"""
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="utf-8">
-            <title>{repo_name} - Tutorial</title>
+            <title>{repo_name} - MAKER Analysis</title>
             <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    max-width: 1000px;
-                    margin: 0 auto;
-                    padding: 20px;
-                    line-height: 1.6;
-                    background: #f5f5f5;
-                }}
-                .header {{
-                    background: white;
-                    padding: 30px;
-                    border-radius: 10px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                    margin-bottom: 20px;
-                    text-align: center;
-                }}
-                .content {{
-                    background: white;
-                    padding: 30px;
-                    border-radius: 10px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                }}
-                pre {{
-                    background: #2d2d2d;
-                    color: white;
-                    padding: 15px;
-                    border-radius: 5px;
-                    overflow-x: auto;
-                }}
-                .feature {{
-                    background: #e8f0fe;
-                    padding: 15px;
-                    border-radius: 5px;
-                    margin: 10px 0;
-                }}
-                .file-count {{
-                    background: #4285f4;
-                    color: white;
-                    padding: 8px 16px;
-                    border-radius: 20px;
-                }}
+                body {{ font-family: system-ui, -apple-system, sans-serif; max-width: 900px; margin: 0 auto; padding: 40px; line-height: 1.6; color: #333; }}
+                h1, h2, h3 {{ color: #2c3e50; }}
+                pre {{ background: #f4f6f8; padding: 15px; border-radius: 8px; overflow-x: auto; }}
+                .tag {{ background: #e1f5fe; color: #0277bd; padding: 4px 8px; border-radius: 4px; font-size: 0.9em; }}
             </style>
         </head>
         <body>
-            <div class="header">
-                <h1>🚀 {repo_name}</h1>
-                <p>Generated with Ollama + LangChain</p>
-                <div class="file-count">📁 {file_count} files analyzed</div>
-            </div>
-            
-            <div class="content">
-                <div class="feature">
-                    <strong>✨ Features:</strong> 
-                    Code-aware Q&A | Source referencing | Semantic search
-                </div>
-                {tutorial_html}
-            </div>
+            <h1>📦 {repo_name} <span class="tag">AI Analysis</span></h1>
+            {tutorial_html}
         </body>
         </html>
         """
-        
         os.makedirs("reports", exist_ok=True)
-        report_file = f"reports/{repo_name}_tutorial.html"
-        
+        report_file = f"reports/{repo_name}_maker.html"
         with open(report_file, "w", encoding="utf-8") as f:
             f.write(html_content)
-        
         return report_file
 
 def main():
-    print("=" * 50)
-    print("🤖 Tutorial Generator - Ollama + LangChain")
-    print("=" * 50)
-    
-    # Check Ollama
-    try:
-        response = requests.get("http://localhost:11434/api/tags", timeout=10)
-        if response.status_code != 200:
-            print("❌ Ollama not running! Run: ollama serve")
-            return
-        
-        # Check if model exists
-        models = response.json().get("models", [])
-        model_names = [model.get("name", "") for model in models]
-        if "llama3.1:8b" not in model_names:
-            print("❌ Model llama3.1:8b not found! Run: ollama pull llama3.1:8b")
-            return
-            
-    except Exception as e:
-        print(f"❌ Ollama error: {e}")
-        print("Make sure Ollama is running: ollama serve")
+    parser = argparse.ArgumentParser(description="Codebase Explainer (MAKER Edition)")
+    parser.add_argument("--url", help="GitHub Repository URL")
+    parser.add_argument("--model", default="llama3.1:8b", help="Ollama model to use")
+    parser.add_argument("--persist", action="store_true", help="Save/Load vector DB from disk")
+    args = parser.parse_args()
+
+    # Interactive mode if no URL
+    repo_url = args.url
+    if not repo_url:
+        print("="*50)
+        print("🤖 Codebase Explainer - MAKER Framework")
+        print("="*50)
+        repo_url = input("\n📥 Enter GitHub URL: ").strip()
+
+    if not repo_url:
+        print("❌ URL required.")
         return
+
+    generator = TutorialGeneratorMAKER(model_name=args.model)
     
-    # Get URL
-    repo_url = input("\n📥 Enter GitHub URL: ").strip()
-    if not repo_url.startswith("https://github.com/"):
-        print("❌ Invalid GitHub URL")
+    # 1. Clone
+    repo_path = generator.clone_repository(repo_url)
+    repo_name = Path(repo_path).name
+    
+    # 2. Load Docs
+    documents = generator.load_code_documents()
+    if not documents:
+        print("❌ No documents found.")
         return
+
+    # 3. MAKER Tutorial Generation
+    tutorial = generator.generate_tutorial_maker_style(repo_name, documents)
+    report_path = generator.create_html_report(tutorial, repo_name)
+    print(f"\n✨ Report generated: {report_path}")
+
+    # 4. Q&A System
+    generator.setup_qa_system(documents, use_persist=args.persist)
     
-    # Initialize generator
-    generator = TutorialGeneratorWithLangChain()
-    
-    try:
-        # Clone repo
-        print("\n📥 Cloning repository...")
-        repo_path = generator.clone_repository(repo_url)
-        repo_name = Path(repo_path).name
+    print("\n💬 Q&A System Ready! (Type 'quit' to exit)")
+    while True:
+        q = input("\n❓ Question: ").strip()
+        if q.lower() in ['quit', 'exit', 'q']:
+            break
         
-        # Load documents
-        print("📚 Loading code documents...")
-        documents = generator.load_code_documents()
-        
-        if not documents:
-            print("❌ No code files found!")
-            return
-        
-        # Generate tutorial
-        print("📝 Generating tutorial...")
-        tutorial = generator.generate_tutorial(repo_name, documents)
-        
-        # Create report
-        print("🎨 Creating HTML report...")
-        report_path = generator.create_html_report(tutorial, repo_name, len(documents))
-        
-        # Setup Q&A system
-        print("🔧 Setting up Q&A system...")
-        generator.setup_qa_system(documents)
-        
-        print(f"\n✅ Tutorial generated: {report_path}")
-        
-        # Interactive Q&A
-        if generator.qa_chain:
-            print("\n💬 Q&A System Ready! Ask questions about the codebase.")
-            print("Type 'quit' to exit.\n")
+        if not generator.qa_chain:
+            print("⚠️ System not ready.")
+            continue
             
-            while True:
-                question = input("❓ Question: ").strip()
-                if question.lower() in ['quit', 'exit', 'q']:
-                    break
-                
-                result = generator.ask_question(question)
-                
-                if "error" in result:
-                    print(f"❌ Error: {result['error']}")
-                else:
-                    print(f"\n📝 Answer: {result['answer']}")
-                    if result.get('sources'):
-                        print("\n📚 Sources:")
-                        for i, source in enumerate(result['sources'], 1):
-                            print(f"   {i}. {source['file']}")
-                    print("-" * 50)
-        else:
-            print("⚠️ Q&A system not available, but tutorial was generated successfully!")
-            
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
+        res = generator.qa_chain({"query": q})
+        print(f"\n📝 Answer: {res['result']}")
+        print("\nSources:")
+        for doc in res.get("source_documents", []):
+            print(f"- {doc.metadata['source']}")
 
 if __name__ == "__main__":
     main()

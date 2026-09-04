@@ -1,92 +1,136 @@
-# 🤖 Codebase-Explainer-QnA (MAKER Edition)
+# 🤖 Codebase-Explainer-QnA (Gemini MAKER Edition)
 
-Tired of spending hours trying to understand a new open-source project? This tool is built for **open-source contributors** to get up to speed on any new codebase in minutes.
+Tired of spending hours trying to understand a new open-source project? This tool is built for **developers and open-source contributors** to get up to speed on any new codebase in minutes.
 
-It uses a local LLM (Ollama) and the **MAKER Framework** to decompose the codebase into micro-tasks, generating a high-quality architectural tutorial and an interactive Q&A system.
+Powered by **Google Gemini** (`gemini-3.1-flash-lite`) and the **MAKER Framework**, it decomposes any GitHub repository into micro-tasks, builds an AST-based code dependency graph, generates a comprehensive architectural tutorial report, and provides an interactive AI Q&A and debugging system.
 
-## ✨ Features
+---
 
-*   **Web Interface (NEW):** A modern, dark-themed dashboard to chat with your code and view reports.
-*   **MAKER Framework:** Uses "Micro-Agents" to summarize files individually (Decomposition) and validates outputs (Red-Flagging) for higher reliability.
-*   **Code Graph Context (NEW):** Extract AST-based code structure, dependencies, and relationships. Use code structure to augment retrieval even without FAISS.
-*   **Hybrid Retrieval:** Combine FAISS vector similarity with Code Graph structural context for better results.
-*   **Issue Resolver:** A dedicated chat mode to debug specific issues, suggesting files and fixes.
-*   **Automated Tutorial:** Generates an HTML report with project overview and architecture.
-*   **Graph Export:** Export code dependency graph as JSON for visualization and analysis.
-*   **Local & Private:** Uses your local [Ollama](https://ollama.com/) instance.
-*   **Flexible Configuration:** Enable/disable FAISS and Code Graph independently via CLI or Web UI.
-*   **Persistence:** Saves the vector database to disk so you don't have to re-analyze the same repo twice.
+## ✨ Key Features
+
+*   🧠 **Gemini Powered:** High-speed, high-context intelligence using Google's `gemini-3.1-flash-lite` and `gemini-embedding-2`.
+*   🖥️ **Modern Web Dashboard:** Dark-themed web interface with real-time analysis progress, chat mode, issue resolver, and an embedded tutorial report viewer.
+*   🤖 **MAKER Framework:** Applies Massively Agentic Decomposed Processes—spawns micro-agents to analyze code files individually (Map), validates outputs (Red-Flagging), and aggregates them into a comprehensive architectural guide (Reduce).
+*   🔗 **AST Code Graph Context:** Extracts Python AST entities (functions, classes, methods, imports, and calls) and maps relationships using NetworkX. Enables structural context retrieval even without vector embeddings.
+*   🔍 **Hybrid & Fallback Retrieval:** Combines FAISS vector similarity with structural Code Graph matching. Gracefully falls back to pure graph keyword search if API rate limits or quota boundaries are reached.
+*   ⚡ **Smart Analysis Caching:** Automatically detects previously analyzed repositories and loads the cached tutorial report and dependency graph in **under 2 seconds**.
+*   🐞 **Issue Resolver Mode:** Switch modes in the chat interface to pinpoint bug locations and suggest concrete fixes across the codebase.
+*   📊 **Interactive Graph Export:** Exports the complete dependency graph as JSON (`reports/<repo>_codegraph.json`) for downstream analysis.
+
+---
 
 ## 🛠️ Installation & Setup
 
 ### 1. Prerequisites
 *   [Git](https://git-scm.com/downloads)
-*   [Python 3.8+](https://www.python.org/downloads/)
-*   [Ollama](https://ollama.com/) installed and running.
+*   [Python 3.10+](https://www.python.org/downloads/)
+*   A **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/app/apikey)
 
 ### 2. Setup
-1.  **Clone this repository:**
-    ```bash
-    git clone https://github.com/your-username/codebase-quickstart.git
-    cd codebase-quickstart
-    ```
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/AvirupSahaAug/Codebase-Explainer-QnA.git
+   cd Codebase-Explainer-QnA
+   ```
 
-2.  **Install dependencies:**
-    ```bash
-    pip install langchain langchain-community langchain-core langchain-text-splitters faiss-cpu requests markdown tqdm fastapi uvicorn python-multipart
-    ```
+2. **Set up a virtual environment (recommended):**
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate    # On Windows: .venv\Scripts\activate
+   ```
 
-3.  **Pull Ollama models:**
-    ```bash
-    ollama pull llama3.1:8b
-    ollama pull nomic-embed-text
-    ```
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Configure your API Key:**
+   Copy `.env.example` to `.env` and add your Gemini API Key:
+   ```bash
+   cp .env.example .env
+   ```
+   Edit `.env`:
+   ```env
+   GEMINI_API_KEY=AIzaSyYourActualKeyHere
+   ```
+   *(Alternatively, you can paste the API key directly into the sidebar in the Web UI).*
+
+---
 
 ## 🏃‍♂️ How to Use
 
 ### Option A: Web Interface (Recommended)
-The best way to experience the tool is via the simplified Web UI.
 
-1.  **Start the server:**
-    ```bash
-    python server.py
-    ```
-2.  **Open your browser:** Go to `http://localhost:8000`
-3.  **Enter a GitHub URL:** Click "Analyze" and watch the micro-agents work.
-4.  **Chat:** Use the "Chat" or "Issue Resolver" tabs to interact with the codebase.
+1. **Start the FastAPI server:**
+   ```bash
+   python server.py
+   ```
+2. **Open your browser:** Navigate to `http://localhost:8000`
+3. **Connect a Repository:** Enter any public GitHub URL (e.g. `https://github.com/encode/starlette`) and click **"Analyze & Decompose"**.
+4. **Interact:**
+   * **Chat:** Ask questions about architecture, lifecycle, or specific files.
+   * **Issue Resolver:** Describe a bug to get targeted suggestions and source references.
+   * **View Tutorial Report:** Open the generated HTML architectural report directly from the sidebar.
+
+---
 
 ### Option B: CLI Tool
-If you prefer the terminal:
+
+If you prefer working strictly in the terminal:
 
 ```bash
-# Analyze with both FAISS and Code Graph (default)
+# Full analysis with both FAISS and Code Graph (default)
 python tutorial_generator.py --url https://github.com/username/repo --persist
 
-# Use only Code Graph (no FAISS embeddings)
+# Code Graph only (bypasses vector embeddings to save API quota)
 python tutorial_generator.py --url https://github.com/username/repo --no-faiss
 
-# Use only FAISS (traditional vector search)
-python tutorial_generator.py --url https://github.com/username/repo --no-graph
-
-# Disable both (not recommended - will use fallback retriever)
-python tutorial_generator.py --url https://github.com/username/repo --no-graph --no-faiss
+# Use a specific Gemini model
+python tutorial_generator.py --url https://github.com/username/repo --model gemini-3.5-flash-lite
 ```
 
-## 🔧 How It Works (The MAKER Method + Code Graph)
+---
 
-This tool applies the researched **MAKER Framework** (Massively Agentic decomposed processes) plus **Code Graph Context**:
+## 🔧 Architecture: The MAKER Method + Code Graph
 
-### MAKER Framework:
-1.  **Decomposition (Micro-Agents):** Instead of one giant prompt, the tool spawns a "Micro-Agent" for every file to summarize its purpose.
-2.  **Red-Flagging:** Bad outputs from agents are detected and discarded/retried.
-3.  **Aggregation:** Verified summaries are combined to produce the final architectural report.
+```
+ GitHub Repository
+        │
+        ├── AST Parsing (code_graph_builder.py) ──► Directed Entity & Dependency Graph
+        │
+        ├── Document Chunking & Loading
+        │
+        ▼
+ [1. Decomposition]  ──► Micro-Agents summarize each file with Gemini
+        │
+ [2. Red-Flagging]   ──► Validate output & filter errors
+        │
+ [3. Aggregation]    ──► Combine summaries & graph context (Map-Reduce)
+        │
+        ├──► Generated HTML Tutorial Report (saved in reports/)
+        └──► RetrievalQA Chain (Hybrid FAISS Vectors + Graph Context)
+```
 
-### Code Graph (NEW):
-4.  **AST Analysis:** Parses Python files to extract functions, classes, methods, imports, and dependencies.
-5.  **Relationship Mapping:** Builds a directed graph of code entities and how they call each other.
-6.  **Context Enrichment:** Augments documents with related file and dependency information.
-7.  **Hybrid Retrieval:** Combines FAISS vector similarity with code structure for better context.
+---
 
-### Q&A System:
-8.  **RAG Q&A:** The full codebase is embedded into a FAISS vector store and enhanced with graph context.
-9.  **Flexible Retrieval:** Choose between FAISS-only, Graph-only, or hybrid retrieval strategies.
+## 📁 Project Structure
+
+```
+├── server.py                 # FastAPI backend & streaming analysis endpoints
+├── tutorial_generator.py     # Core MAKER engine & Gemini Q&A chain
+├── code_graph_builder.py     # AST dependency graph extraction
+├── static/
+│   ├── index.html            # Web interface with inline reactive client
+│   ├── style.css             # Dark-themed UI styles
+│   └── app.js               # Client controller logic
+├── reports/                  # Generated HTML reports & graph JSON files
+├── requirements.txt          # Python dependencies
+├── .env.example              # Environment variables template
+└── .gitignore                # Git exclusions (protects .env & cache)
+```
+
+---
+
+## 📄 License
+
+MIT License. Feel free to contribute and build upon this project!

@@ -130,7 +130,3 @@ python tutorial_generator.py --url https://github.com/username/repo --model gemi
 ```
 
 ---
-
-## 📄 License
-
-MIT License. Feel free to contribute and build upon this project!

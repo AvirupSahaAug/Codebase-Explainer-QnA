@@ -1,14 +1,32 @@
 import sys
-print(sys.executable)
-try:
-    import langchain
-    print(f"Langchain version: {langchain.__version__}")
-    from langchain.chains import RetrievalQA
-    print("RetrievalQA imported successfully from langchain.chains")
-except ImportError as e:
-    print(f"Error: {e}")
+import os
+
+print(f"Python executable: {sys.executable}")
+print(f"Python version: {sys.version}")
+
+# Check imports
+modules = [
+    ("fastapi", "FastAPI"),
+    ("uvicorn", "Uvicorn"),
+    ("networkx", "NetworkX (Code Graph)"),
+    ("faiss", "FAISS (Vector DB)"),
+    ("markdown", "Markdown"),
+    ("langchain_core", "LangChain Core"),
+    ("langchain_google_genai", "LangChain Google GenAI"),
+    ("google.genai", "Google GenAI SDK"),
+    ("dotenv", "python-dotenv"),
+]
+
+all_ok = True
+for mod, desc in modules:
     try:
-        from langchain.chains import RetrievalQA
-        print("RetrievalQA imported (2nd attempt)")
-    except ImportError as e2:
-        print(f"Error 2: {e2}")
+        __import__(mod)
+        print(f"  ✅ {desc} ({mod})")
+    except ImportError as e:
+        print(f"  ❌ {desc} ({mod}) - {e}")
+        all_ok = False
+
+if all_ok:
+    print("\n🎉 All required packages are installed and ready!")
+else:
+    print("\n⚠️ Some packages are missing. Install them using the parent .venv.")

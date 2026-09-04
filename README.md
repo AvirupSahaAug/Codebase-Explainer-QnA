@@ -8,9 +8,13 @@ It uses a local LLM (Ollama) and the **MAKER Framework** to decompose the codeba
 
 *   **Web Interface (NEW):** A modern, dark-themed dashboard to chat with your code and view reports.
 *   **MAKER Framework:** Uses "Micro-Agents" to summarize files individually (Decomposition) and validates outputs (Red-Flagging) for higher reliability.
+*   **Code Graph Context (NEW):** Extract AST-based code structure, dependencies, and relationships. Use code structure to augment retrieval even without FAISS.
+*   **Hybrid Retrieval:** Combine FAISS vector similarity with Code Graph structural context for better results.
 *   **Issue Resolver:** A dedicated chat mode to debug specific issues, suggesting files and fixes.
 *   **Automated Tutorial:** Generates an HTML report with project overview and architecture.
+*   **Graph Export:** Export code dependency graph as JSON for visualization and analysis.
 *   **Local & Private:** Uses your local [Ollama](https://ollama.com/) instance.
+*   **Flexible Configuration:** Enable/disable FAISS and Code Graph independently via CLI or Web UI.
 *   **Persistence:** Saves the vector database to disk so you don't have to re-analyze the same repo twice.
 
 ## 🛠️ Installation & Setup
@@ -55,15 +59,34 @@ The best way to experience the tool is via the simplified Web UI.
 If you prefer the terminal:
 
 ```bash
-# Analyze a repo and save the database
+# Analyze with both FAISS and Code Graph (default)
 python tutorial_generator.py --url https://github.com/username/repo --persist
+
+# Use only Code Graph (no FAISS embeddings)
+python tutorial_generator.py --url https://github.com/username/repo --no-faiss
+
+# Use only FAISS (traditional vector search)
+python tutorial_generator.py --url https://github.com/username/repo --no-graph
+
+# Disable both (not recommended - will use fallback retriever)
+python tutorial_generator.py --url https://github.com/username/repo --no-graph --no-faiss
 ```
 
-## 🔧 How It Works (The MAKER Method)
+## 🔧 How It Works (The MAKER Method + Code Graph)
 
-This tool applies the researched **MAKER Framework** (Massively Agentic decomposed processes):
+This tool applies the researched **MAKER Framework** (Massively Agentic decomposed processes) plus **Code Graph Context**:
 
+### MAKER Framework:
 1.  **Decomposition (Micro-Agents):** Instead of one giant prompt, the tool spawns a "Micro-Agent" for every file to summarize its purpose.
 2.  **Red-Flagging:** Bad outputs from agents are detected and discarded/retried.
 3.  **Aggregation:** Verified summaries are combined to produce the final architectural report.
-4.  **RAG Q&A:** The full codebase is embedded into a FAISS vector store for the chat system.
+
+### Code Graph (NEW):
+4.  **AST Analysis:** Parses Python files to extract functions, classes, methods, imports, and dependencies.
+5.  **Relationship Mapping:** Builds a directed graph of code entities and how they call each other.
+6.  **Context Enrichment:** Augments documents with related file and dependency information.
+7.  **Hybrid Retrieval:** Combines FAISS vector similarity with code structure for better context.
+
+### Q&A System:
+8.  **RAG Q&A:** The full codebase is embedded into a FAISS vector store and enhanced with graph context.
+9.  **Flexible Retrieval:** Choose between FAISS-only, Graph-only, or hybrid retrieval strategies.

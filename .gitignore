@@ -1,0 +1,33 @@
+# Environment variables (contains private API keys)
+.env
+.env.local
+.env.*.local
+
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# Cloned target repositories
+repo_*/
+repo/
+
+# Cache, vector stores & reports
+db_faiss/
+reports/*.html
+reports/*.json
+!reports/.gitkeep
+
+# Temporary zips / migration folders
+codebase\ explainer\ updated/
+*.zip
+
+# Temporary test scripts
+fix_*.py
+list_models.py

@@ -36,7 +36,7 @@ body {
 }
 
 .brand {
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     font-weight: 600;
     color: var(--text-main);
     display: flex;
@@ -45,6 +45,18 @@ body {
 }
 
 .brand i { color: var(--primary); }
+
+.badge-gemini {
+    font-size: 0.65rem;
+    background: rgba(0, 184, 148, 0.15);
+    color: #00cec9;
+    border: 1px solid rgba(0, 206, 201, 0.3);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
 
 .setup-panel {
     background: rgba(255,255,255,0.03);
@@ -62,21 +74,51 @@ body {
     gap: 8px;
 }
 
-input[type="text"] {
+input[type="text"], input[type="password"] {
     width: 100%;
     background: var(--bg-dark);
     border: 1px solid rgba(255,255,255,0.1);
-    padding: 10px;
+    padding: 10px 12px;
     border-radius: 8px;
     color: white;
     margin-bottom: 10px;
-    font-family:inherit;
+    font-family: inherit;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
 }
 
-input[type="text"]:focus {
+input[type="text"]:focus, input[type="password"]:focus {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 10px var(--primary-glow);
+}
+
+.options-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    user-select: none;
+}
+
+.checkbox-label:hover {
+    color: var(--text-main);
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--primary);
 }
 
 button {
